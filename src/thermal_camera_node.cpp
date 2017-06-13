@@ -22,10 +22,8 @@
 #include <sstream>
 
 ThermalGrabber* thermalGrabber;
-image_transport::CameraPublisher cameraPub;
-sensor_msgs::CameraInfo cameraInfo;
-boost::shared_ptr<TauRGBBitmap> tauRGBBitmap;
-sensor_msgs::Image rosImage;
+TauRGBBitmap* tauRGBBitmap = NULL;
+image_transport::Publisher rosMsgPub;
 unsigned int mWidth;
 unsigned int mHeight;
 
@@ -37,22 +35,27 @@ public:
 
 void callbackTauImage(TauRawBitmap& tauRawBitmap, void* caller)
 {
-  if ( !tauRGBBitmap || tauRGBBitmap->width != tauRawBitmap.width || tauRGBBitmap->height != tauRawBitmap.height )
-	  tauRGBBitmap = boost::make_shared<TauRGBBitmap>( tauRawBitmap.width, tauRawBitmap.height );
+  sensor_msgs::ImagePtr rosImage = boost::make_shared<sensor_msgs::Image>();
+
+  tauRGBBitmap = new TauRGBBitmap(tauRawBitmap.width,tauRawBitmap.height);
 
   thermalGrabber->convertTauRawBitmapToTauRGBBitmap (tauRawBitmap, *tauRGBBitmap);
 
-  rosImage.width = tauRGBBitmap->width;
-  rosImage.height = tauRGBBitmap->height;
-  rosImage.step = tauRGBBitmap->width * 3;
+  rosImage->header.frame_id = "thermalCamera"; 
+  rosImage->encoding = "rgb8";
+  rosImage->width = tauRGBBitmap->width;
+  rosImage->height = tauRGBBitmap->height;
+  rosImage->step = tauRGBBitmap->width * 3;
 
-  if ( tauRGBBitmap->data != NULL && tauRGBBitmap->width == mWidth && tauRGBBitmap->height == mHeight)
+  if (tauRGBBitmap != NULL && tauRGBBitmap->data != NULL && tauRGBBitmap->width == mWidth && tauRGBBitmap->height == mHeight)
   {
-      rosImage.data.resize(tauRGBBitmap->height*tauRGBBitmap->width*3);
-      memcpy(rosImage.data.data(), tauRGBBitmap->data, tauRGBBitmap->height*tauRGBBitmap->width*3);
+      rosImage->data.resize(tauRGBBitmap->height*tauRGBBitmap->width*3);
+      memcpy(rosImage->data.data(), tauRGBBitmap->data, tauRGBBitmap->height*tauRGBBitmap->width*3);
   }
 
-  cameraPub.publish(rosImage,cameraInfo);
+  delete tauRGBBitmap;
+
+  rosMsgPub.publish(rosImage);
 }
 
 void Thermal::thermal()
@@ -60,39 +63,29 @@ void Thermal::thermal()
     thermalGrabber = new ThermalGrabber(callbackTauImage, this);
     mWidth = thermalGrabber->getResolutionWidth();
     mHeight = thermalGrabber->getResolutionHeight();
-    
-    cameraInfo.width = thermalGrabber->getResolutionWidth();
-    cameraInfo.height = thermalGrabber->getResolutionHeight();
 }
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, ROS_PACKAGE_NAME );
+  ros::init(argc, argv, "thermal_camera_node");
 
-  ros::NodeHandle nh("~");
-  
-  int queue_size;
-  double rate_hz;
-  std::string frame_id;
-  
-  nh.param<int>( "queue_size", queue_size, 1 );
-  nh.param<double>( "rate_hz", rate_hz, 30 );
-  nh.param<std::string>( "frame_id", rosImage.header.frame_id, "thermalCamera" );
-  nh.param<std::string>( "frame_id", rosImage.encoding, "rgb8" );
-  
-  image_transport::ImageTransport it(nh);
-  cameraPub = it.advertiseCamera( "thermal_camera", queue_size );
-  
-  Thermal thermal;
-  thermal.thermal();
+  ros::NodeHandle n("~");
+  image_transport::ImageTransport it(n);
+  rosMsgPub = it.advertise("/thermal_camera/Image", 1);
 
-  ros::Rate loop_rate(rate_hz);
+  Thermal* thermal = new Thermal();
+  thermal->thermal();
+
+  ros::Rate loop_rate(30);
 
   while (ros::ok())
   {
     ros::spinOnce();
+
     loop_rate.sleep();
   }
+
+  delete thermal;
 
   return 0;
 }
