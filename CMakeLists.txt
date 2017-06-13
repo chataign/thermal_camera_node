@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 2.8.3)
 
 project(thermal_camera_node)
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-
 find_package(catkin REQUIRED COMPONENTS roscpp sensor_msgs image_transport)
+
+catkin_package()
 
 set(THERMALLIB "/usr/lib/")
 set(THERMALINC "/usr/include/")
