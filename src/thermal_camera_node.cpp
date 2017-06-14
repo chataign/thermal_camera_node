@@ -36,6 +36,7 @@ void callbackTauImage(TauRawBitmap& tauRawBitmap, void* caller)
 
   thermalGrabber->convertTauRawBitmapToTauRGBBitmap (tauRawBitmap, *tauRGBBitmap);
 
+  rosImage.header.stamp = ros::Time::now();
   rosImage.width = tauRGBBitmap->width;
   rosImage.height = tauRGBBitmap->height;
   rosImage.step = tauRGBBitmap->width * 3;
